@@ -62,6 +62,18 @@ async function handleTestConnection() {
   return { success: true, datasets: result };
 }
 
+async function deleteDatasetByName(datasetName) {
+  const { apiKey, baseUrl } = await getSettings();
+  if (!apiKey) throw new Error('No API key configured.');
+
+  const list = await cogneeRequest('/api/v1/datasets', 'GET', null, apiKey, baseUrl);
+  const match = Array.isArray(list) ? list.find(d => d.name === datasetName) : null;
+  if (!match) return { success: true, skipped: true };
+
+  await cogneeRequest(`/api/v1/datasets/${match.id}`, 'DELETE', null, apiKey, baseUrl);
+  return { success: true };
+}
+
 // --- IndexedDB: holds raw job payload bytes (too large/binary for chrome.storage.local) ---
 
 function openDb() {
@@ -122,6 +134,12 @@ async function getJobsAndState() {
   };
 }
 
+function withUniqueFilename(filename, id) {
+  const dot = filename.lastIndexOf('.');
+  if (dot === -1) return `${filename}-${id}`;
+  return `${filename.slice(0, dot)}-${id}${filename.slice(dot)}`;
+}
+
 async function saveJobs(jobs, queueState) {
   await chrome.storage.local.set({ jobs, queueState });
 }
@@ -131,6 +149,11 @@ async function enqueueJob({ title, datasetName, projectName, projectColor, kind,
   const blob = base64ToBlob(dataBase64, mime);
   await putPayload(id, blob);
 
+  // Unique filename so a stopped/cancelled job's exact data item can be
+  // found and deleted from cognee without touching other jobs' data in
+  // the same (per-project) dataset.
+  const uniqueFilename = withUniqueFilename(filename, id);
+
   const { jobs, queueState } = await getJobsAndState();
   jobs.push({
     id,
@@ -139,7 +162,7 @@ async function enqueueJob({ title, datasetName, projectName, projectColor, kind,
     projectName,
     projectColor,
     kind,
-    filename,
+    filename: uniqueFilename,
     url: url || '',
     status: 'queued',
     stage: 'queued',
@@ -162,6 +185,60 @@ async function removeJob(id) {
     await deletePayload(id);
   } catch {}
   return { success: true };
+}
+
+async function stopJob(id) {
+  const { apiKey, baseUrl } = await getSettings();
+  let { jobs, queueState } = await getJobsAndState();
+  const job = jobs.find(j => j.id === id);
+  if (!job) return { success: true };
+
+  let dataDeleted = false;
+  let deleteError = null;
+
+  // A queued job never touched the server — nothing to clean up there.
+  // A processing job already has a Data record in the (per-project) dataset,
+  // so find that exact item by its unique filename and delete only that,
+  // not the whole dataset (which may hold other pages already cognified).
+  if (job.status === 'processing' && job.datasetId && apiKey) {
+    try {
+      const dataList = await cogneeRequest(
+        `/api/v1/datasets/${job.datasetId}/data`,
+        'GET',
+        null,
+        apiKey,
+        baseUrl
+      );
+      const match = Array.isArray(dataList) ? dataList.find(d => d.name === job.filename) : null;
+      if (match) {
+        await cogneeRequest(
+          `/api/v1/datasets/${job.datasetId}/data/${match.id}`,
+          'DELETE',
+          null,
+          apiKey,
+          baseUrl
+        );
+        dataDeleted = true;
+      }
+    } catch (err) {
+      deleteError = err.message;
+    }
+  }
+
+  const wasActive = job.status === 'processing';
+
+  ({ jobs, queueState } = await getJobsAndState());
+  if (queueState.activeJobId === id) queueState.activeJobId = null;
+  const remaining = jobs.filter(j => j.id !== id);
+  await saveJobs(remaining, queueState);
+
+  try {
+    await deletePayload(id);
+  } catch {}
+
+  await tickQueue();
+
+  return { success: true, wasActive, dataDeleted, deleteError };
 }
 
 const STAGE_PIPELINE_STATUS = {
@@ -301,6 +378,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'REMOVE_JOB') {
     removeJob(msg.id)
+      .then(sendResponse)
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (msg.type === 'STOP_JOB') {
+    stopJob(msg.id)
+      .then(sendResponse)
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (msg.type === 'DELETE_DATASET') {
+    deleteDatasetByName(msg.datasetName)
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;

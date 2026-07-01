@@ -110,6 +110,8 @@ async function addProject(name, customSlug) {
 }
 
 async function deleteProject(id) {
+  const project = projects.find(p => p.id === id);
+
   projects = projects.filter(p => p.id !== id);
   if (activeProjectId === id) {
     activeProjectId = projects.length > 0 ? projects[0].id : null;
@@ -118,6 +120,25 @@ async function deleteProject(id) {
   await chrome.storage.local.set({ projects });
   renderProjects();
   updateCognifyBtn();
+
+  if (project) {
+    setStatus(`Deleting "${project.name}" dataset from Cognee...`, 'loading');
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'DELETE_DATASET', datasetName: project.slug });
+      if (response?.success) {
+        setStatus(
+          response.skipped
+            ? `✓ "${project.name}" removed (no dataset existed on Cognee yet).`
+            : `✓ "${project.name}" and its Cognee dataset were deleted.`,
+          'success'
+        );
+      } else {
+        setStatus(`⚠ Removed locally, but couldn't delete "${project.name}" dataset from Cognee: ${response?.error || 'unknown error'}`, 'error');
+      }
+    } catch (err) {
+      setStatus(`⚠ Removed locally, but couldn't delete "${project.name}" dataset from Cognee: ${err.message}`, 'error');
+    }
+  }
 }
 
 function updateCognifyBtn() {
@@ -477,11 +498,13 @@ function renderQueue(jobs) {
       const pct = STAGE_PERCENT[job.stage] ?? 0;
       const label = STAGE_LABEL[job.stage] || job.stage;
       const fillClass = job.status === 'done' ? 'done' : job.status === 'error' ? 'error' : '';
+      const isActive = job.status === 'queued' || job.status === 'processing';
       row.innerHTML = `
         <div class="job-row-top">
           <div class="job-dot" style="background:${job.projectColor || '#6366f1'}"></div>
           <span class="job-title" title="${escapeHtml(job.title || job.filename)}">${escapeHtml(job.title || job.filename)}</span>
           <span class="job-status ${job.status === 'error' ? 'error' : job.status === 'done' ? 'done' : ''}">${label}</span>
+          ${isActive ? `<button class="job-stop" data-id="${job.id}" title="Stop and remove">Stop</button>` : ''}
           ${(job.status === 'done' || job.status === 'error') ? `<button class="job-dismiss" data-id="${job.id}" title="Dismiss">×</button>` : ''}
         </div>
         <div class="job-progress"><div class="job-progress-fill ${fillClass}" style="width:${pct}%"></div></div>
@@ -491,6 +514,23 @@ function renderQueue(jobs) {
       if (dismissBtn) {
         dismissBtn.addEventListener('click', async () => {
           await chrome.runtime.sendMessage({ type: 'REMOVE_JOB', id: job.id });
+          refreshQueue();
+        });
+      }
+      const stopBtn = row.querySelector('.job-stop');
+      if (stopBtn) {
+        stopBtn.addEventListener('click', async () => {
+          stopBtn.disabled = true;
+          stopBtn.textContent = '...';
+          const response = await chrome.runtime.sendMessage({ type: 'STOP_JOB', id: job.id });
+          if (response?.success && response.wasActive) {
+            setStatus(
+              response.dataDeleted
+                ? `Stopped "${job.title || job.filename}" and deleted its data from Cognee.`
+                : `Stopped "${job.title || job.filename}" — could not confirm its data was removed from Cognee.`,
+              response.dataDeleted ? 'success' : 'error'
+            );
+          }
           refreshQueue();
         });
       }

@@ -180,6 +180,24 @@ body {
   color: #f87171;
 }
 
+.job-stop {
+  background: none;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.job-stop:hover {
+  color: #f87171;
+  border-color: #7f1d1d;
+}
+
 .job-progress {
   height: 4px;
   background: #0f0f13;
