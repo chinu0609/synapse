@@ -642,14 +642,36 @@ body::after {
 .job-progress-fill.error { background: #f87171; box-shadow: 0 0 10px #f87171; }
 
 /* Glowing Footer Button */
+
 .footer {
-  padding: 20px;
-  background: rgba(3, 3, 5, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border-glass);
-  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
+  margin-top: auto;
+  position: relative;
+  z-index: 10;
+  padding: 16px 20px 20px;
+  
+  
+  background: transparent;
+  border-top: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
+
+.status-area {
+  min-height: 20px; 
+  margin-bottom: 12px; 
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-area.success { color: #4ade80; }
+.status-area.error { color: #f87171; }
+.status-area.loading { color: #a5b4fc; }
 
 .cognify-btn {
   width: 100%;
