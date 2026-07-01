@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synapse</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="3" fill="#6366f1"/>
+          <circle cx="4" cy="8" r="2" fill="#818cf8"/>
+          <circle cx="20" cy="8" r="2" fill="#818cf8"/>
+          <circle cx="4" cy="16" r="2" fill="#818cf8"/>
+          <circle cx="20" cy="16" r="2" fill="#818cf8"/>
+          <line x1="6" y1="8" x2="9" y2="11" stroke="#6366f1" stroke-width="1.5"/>
+          <line x1="18" y1="8" x2="15" y2="11" stroke="#6366f1" stroke-width="1.5"/>
+          <line x1="6" y1="16" x2="9" y2="13" stroke="#6366f1" stroke-width="1.5"/>
+          <line x1="18" y1="16" x2="15" y2="13" stroke="#6366f1" stroke-width="1.5"/>
+        </svg>
+        <span class="logo-text">Synapse</span>
+      </div>
+      <button class="settings-btn" id="settingsBtn" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <div class="tab-nav">
+      <button class="tab-btn active" id="tabBtnCognify" data-tab="cognify">Cognify</button>
+      <button class="tab-btn" id="tabBtnQueue" data-tab="queue">
+        Queue
+        <span class="tab-badge" id="queueBadge" style="display:none;">0</span>
+      </button>
+    </div>
+
+    <div class="tab-panel" id="tabCognify">
+      <div class="section-label">
+        <span>Projects</span>
+        <button class="add-btn" id="addProjectBtn" title="New project">+</button>
+      </div>
+
+      <div class="add-project-form" id="addProjectForm" style="display:none;">
+        <input type="text" id="newProjectInput" placeholder="Project name..." maxlength="40" autocomplete="off">
+        <div class="slug-row">
+          <span class="slug-label">Dataset:</span>
+          <input type="text" id="newSlugInput" placeholder="dataset_slug" maxlength="60" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="form-actions">
+          <button class="btn-confirm" id="confirmAddBtn">Add</button>
+          <button class="btn-cancel" id="cancelAddBtn">Cancel</button>
+        </div>
+      </div>
+
+      <div class="project-list" id="projectList">
+        <div class="empty-state" id="emptyState">
+          <p>No projects yet.</p>
+          <p>Click <strong>+</strong> to add one.</p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="status-area" id="statusArea"></div>
+        <button class="cognify-btn" id="cognifyBtn" disabled>
+          <span id="cognifyBtnText">Cognify Page</span>
+          <div class="spinner" id="spinner" style="display:none;"></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tabQueue" style="display:none;">
+      <div class="queue-list" id="queueList">
+        <div class="empty-state" id="queueEmptyState">
+          <p>No jobs yet.</p>
+          <p>Cognify a page to see it here.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

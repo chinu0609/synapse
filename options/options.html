@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synapse — Settings</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f13;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: #a5b4fc;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+
+    .card {
+      background: #161622;
+      border: 1px solid #1e1e2e;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 18px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      background: #0f0f13;
+      border: 1px solid #2d2d3d;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 13px;
+      padding: 9px 36px 9px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    input:focus {
+      border-color: #6366f1;
+    }
+
+    .toggle-visibility {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px;
+    }
+
+    .toggle-visibility:hover { color: #a5b4fc; }
+
+    .hint {
+      font-size: 11px;
+      color: #475569;
+      margin-top: 5px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn-save {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-save:hover {
+      background: linear-gradient(135deg, #4f46e5, #4338ca);
+    }
+
+    .btn-test {
+      background: none;
+      color: #94a3b8;
+      border: 1px solid #2d2d3d;
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-test:hover {
+      color: #e2e8f0;
+      border-color: #475569;
+    }
+
+    .btn-test:disabled, .btn-save:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 14px;
+      font-size: 13px;
+      min-height: 20px;
+    }
+
+    .status.success { color: #4ade80; }
+    .status.error { color: #f87171; }
+    .status.loading { color: #94a3b8; }
+
+    .info-card {
+      background: #12121e;
+      border: 1px solid #1e1e2e;
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+
+    .info-card p {
+      font-size: 12px;
+      color: #475569;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .info-card a {
+      color: #818cf8;
+      text-decoration: none;
+    }
+
+    .info-card a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="logo-text">Synapse Settings</div>
+        <div class="subtitle">Configure your Cognee Cloud connection</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cognee Cloud API</div>
+
+      <div class="field">
+        <label for="apiKey">API Key</label>
+        <div class="input-wrap">
+          <input type="password" id="apiKey" placeholder="cognee_...">
+          <button class="toggle-visibility" id="toggleKey" title="Show/hide">👁</button>
+        </div>
+        <div class="hint">Find your API key at <a href="https://app.cognee.ai" target="_blank" style="color:#818cf8;">app.cognee.ai</a> → Settings → API Keys</div>
+      </div>
+
+      <div class="field">
+        <label for="baseUrl">Base URL</label>
+        <div class="input-wrap">
+          <input type="text" id="baseUrl" placeholder="https://api.cognee.ai">
+        </div>
+        <div class="hint">Leave default unless self-hosting Cognee.</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-save" id="saveBtn">Save Settings</button>
+        <button class="btn-test" id="testBtn">Test Connection</button>
+      </div>
+
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="info-card">
+      <p>Synapse extracts clean article content from web pages using Mozilla Readability and stores it in your Cognee Cloud memory, organized by project (dataset).</p>
+      <p>Once cognified, your knowledge is available via Cognee's integrations with Claude, Codex, and other AI tools.</p>
+      <p>Learn more at <a href="https://cognee.ai" target="_blank">cognee.ai</a></p>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
