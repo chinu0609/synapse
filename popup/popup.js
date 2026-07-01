@@ -99,6 +99,26 @@ async function addProject(name, customSlug) {
     setStatus('Dataset name already in use.', 'error');
     return;
   }
+
+  const { cogneeApiKey } = await chrome.storage.local.get('cogneeApiKey');
+  if (cogneeApiKey) {
+    setStatus('Checking dataset name against Cognee...', 'loading');
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'DATASET_EXISTS', datasetName: slug });
+      if (response?.success) {
+        if (response.exists) {
+          setStatus(`✗ Dataset "${slug}" already exists in Cognee. Choose a different name.`, 'error');
+          return;
+        }
+        clearStatus();
+      } else {
+        setStatus(`⚠ Couldn't verify dataset name against Cognee (${response?.error || 'unknown error'}) — added anyway.`, 'error');
+      }
+    } catch (err) {
+      setStatus(`⚠ Couldn't verify dataset name against Cognee: ${err.message} — added anyway.`, 'error');
+    }
+  }
+
   const color = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
   const project = { id: generateId(), name: name.trim(), slug, color };
   projects.push(project);
@@ -111,6 +131,35 @@ async function addProject(name, customSlug) {
 
 async function deleteProject(id) {
   const project = projects.find(p => p.id === id);
+  if (!project) return;
+
+  const card = document.querySelector(`.project-card[data-id="${id}"]`);
+  const deleteBtn = card?.querySelector('.delete-btn');
+  if (deleteBtn) deleteBtn.disabled = true;
+
+  setStatus(`Deleting "${project.name}" dataset from Cognee...`, 'loading');
+
+  let remoteOk = false;
+  let skipped = false;
+  let errorMsg = '';
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'DELETE_DATASET', datasetName: project.slug });
+    remoteOk = !!response?.success;
+    skipped = !!response?.skipped;
+    if (!remoteOk) errorMsg = response?.error || 'unknown error';
+  } catch (err) {
+    errorMsg = err.message;
+  }
+
+  if (!remoteOk) {
+    if (deleteBtn) deleteBtn.disabled = false;
+    setStatus(
+      `✗ "${project.name}" kept — its Cognee dataset could not be deleted (${errorMsg}). ` +
+      `The dataset may be in use elsewhere (e.g. open in Cognee's dashboard/graph view). Try again shortly.`,
+      'error'
+    );
+    return;
+  }
 
   projects = projects.filter(p => p.id !== id);
   if (activeProjectId === id) {
@@ -121,24 +170,12 @@ async function deleteProject(id) {
   renderProjects();
   updateCognifyBtn();
 
-  if (project) {
-    setStatus(`Deleting "${project.name}" dataset from Cognee...`, 'loading');
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'DELETE_DATASET', datasetName: project.slug });
-      if (response?.success) {
-        setStatus(
-          response.skipped
-            ? `✓ "${project.name}" removed (no dataset existed on Cognee yet).`
-            : `✓ "${project.name}" and its Cognee dataset were deleted.`,
-          'success'
-        );
-      } else {
-        setStatus(`⚠ Removed locally, but couldn't delete "${project.name}" dataset from Cognee: ${response?.error || 'unknown error'}`, 'error');
-      }
-    } catch (err) {
-      setStatus(`⚠ Removed locally, but couldn't delete "${project.name}" dataset from Cognee: ${err.message}`, 'error');
-    }
-  }
+  setStatus(
+    skipped
+      ? `✓ "${project.name}" removed (no dataset existed on Cognee yet).`
+      : `✓ "${project.name}" and its Cognee dataset were deleted.`,
+    'success'
+  );
 }
 
 function updateCognifyBtn() {

@@ -4,16 +4,15 @@
   "version": "1.0.0",
   "description": "Cognify web pages into your AI memory, organized by project.",
   "permissions": [
-    "storage", 
-    "activeTab", 
-    "scripting", 
+    "storage",
+    "activeTab",
+    "scripting",
     "alarms",
-    "sidePanel"
+    "sidePanel",
+    "tabs"
   ],
   "host_permissions": [
-    "https://api.cognee.ai/*", 
-    "https://docs.google.com/*", 
-    "https://*.googleusercontent.com/*"
+    "<all_urls>"
   ],
   "action": {
     "default_icon": {

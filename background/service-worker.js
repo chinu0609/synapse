@@ -11,18 +11,29 @@ async function getSettings() {
   };
 }
 
-async function cogneeRequest(path, method, body, apiKey, baseUrl) {
+async function cogneeRequest(path, method, body, apiKey, baseUrl, retries = 0) {
   const url = `${baseUrl}${path}`;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Api-Key': apiKey
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
 
-  return handleCogneeResponse(res);
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Api-Key': apiKey
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+
+    // cognee's embedded graph DB briefly holds a per-dataset file lock
+    // (e.g. while the dashboard has that dataset's graph open) — a 500
+    // here is often that transient lock, not a real failure, so retry.
+    if (res.status === 500 && attempt < retries) {
+      await new Promise(r => setTimeout(r, 700 * (attempt + 1)));
+      continue;
+    }
+
+    return handleCogneeResponse(res);
+  }
 }
 
 async function cogneeFormRequest(path, formData, apiKey, baseUrl) {
@@ -70,8 +81,17 @@ async function deleteDatasetByName(datasetName) {
   const match = Array.isArray(list) ? list.find(d => d.name === datasetName) : null;
   if (!match) return { success: true, skipped: true };
 
-  await cogneeRequest(`/api/v1/datasets/${match.id}`, 'DELETE', null, apiKey, baseUrl);
+  await cogneeRequest(`/api/v1/datasets/${match.id}`, 'DELETE', null, apiKey, baseUrl, 2);
   return { success: true };
+}
+
+async function datasetExists(datasetName) {
+  const { apiKey, baseUrl } = await getSettings();
+  if (!apiKey) throw new Error('No API key configured.');
+
+  const list = await cogneeRequest('/api/v1/datasets', 'GET', null, apiKey, baseUrl);
+  const exists = Array.isArray(list) && list.some(d => d.name === datasetName);
+  return { success: true, exists };
 }
 
 // --- IndexedDB: holds raw job payload bytes (too large/binary for chrome.storage.local) ---
@@ -216,7 +236,8 @@ async function stopJob(id) {
           'DELETE',
           null,
           apiKey,
-          baseUrl
+          baseUrl,
+          2
         );
         dataDeleted = true;
       }
@@ -397,6 +418,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'DELETE_DATASET') {
     deleteDatasetByName(msg.datasetName)
+      .then(sendResponse)
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (msg.type === 'DATASET_EXISTS') {
+    datasetExists(msg.datasetName)
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
