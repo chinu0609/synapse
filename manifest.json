@@ -3,15 +3,27 @@
   "name": "Synapse",
   "version": "1.0.0",
   "description": "Cognify web pages into your AI memory, organized by project.",
-  "permissions": ["storage", "activeTab", "scripting", "alarms"],
-  "host_permissions": ["https://api.cognee.ai/*", "https://docs.google.com/*", "https://*.googleusercontent.com/*"],
+  "permissions": [
+    "storage", 
+    "activeTab", 
+    "scripting", 
+    "alarms",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://api.cognee.ai/*", 
+    "https://docs.google.com/*", 
+    "https://*.googleusercontent.com/*"
+  ],
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
+  },
+  "side_panel": {
+    "default_path": "popup/popup.html"
   },
   "background": {
     "service_worker": "background/service-worker.js"
