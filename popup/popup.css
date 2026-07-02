@@ -881,23 +881,67 @@ body::after {
   padding: 14px 20px 8px;
 }
 
-.chat-dataset-row select {
+.chat-select-wrap {
+  position: relative;
   flex: 1;
   min-width: 0;
-  background: rgba(0, 0, 0, 0.3);
+}
+
+.chat-select-wrap::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--neon-purple);
+  box-shadow: 0 0 8px var(--neon-purple);
+  pointer-events: none;
+}
+
+.chat-dataset-row select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%23818cf8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
   border: 1px solid var(--border-glass);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--text-main);
   font-size: 13px;
-  padding: 10px 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  font-family: inherit;
+  padding: 11px 30px 11px 26px;
   outline: none;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat-dataset-row select option {
+  background: #14141c;
+  color: var(--text-main);
+  font-weight: 600;
+  padding: 8px;
+}
+
+.chat-dataset-row select option:first-child {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-style: italic;
 }
 
 .chat-deep-toggle {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 700;
@@ -908,6 +952,7 @@ body::after {
   padding: 8px 10px;
   border: 1px solid var(--border-glass);
   border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
   transition: all 0.2s ease;
 }
 
@@ -918,12 +963,45 @@ body::after {
 }
 
 .chat-deep-toggle input {
-  accent-color: var(--neon-indigo);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex-shrink: 0;
+  border: 1px solid var(--border-glass);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.chat-deep-toggle input:checked {
+  background: linear-gradient(135deg, var(--neon-indigo), var(--neon-purple));
+  border-color: var(--neon-purple);
+}
+
+.chat-deep-toggle input:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.chat-dataset-row select:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .chat-dataset-row select:focus {
   border-color: var(--neon-purple);
-  box-shadow: 0 0 8px var(--glow-indigo);
+  box-shadow: 0 0 10px var(--glow-indigo), inset 0 0 10px rgba(99, 102, 241, 0.05);
 }
 
 .chat-notice {
