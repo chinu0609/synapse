@@ -85,6 +85,26 @@ async function deleteDatasetByName(datasetName) {
   return { success: true };
 }
 
+async function chatSearch(datasetName, query, deep) {
+  const { apiKey, baseUrl } = await getSettings();
+  if (!apiKey) throw new Error('No API key configured.');
+
+  const result = await cogneeRequest('/api/v1/search', 'POST', {
+    query,
+    search_type: deep ? 'GRAPH_COMPLETION_COT' : 'GRAPH_COMPLETION',
+    datasets: [datasetName]
+  }, apiKey, baseUrl);
+
+  // Response shape: [{ dataset_id, dataset_name, search_result: ["..."] }, ...]
+  const first = Array.isArray(result) ? result[0] : result;
+  const searchResult = first?.search_result;
+  const answer = Array.isArray(searchResult)
+    ? searchResult.join('\n\n')
+    : (searchResult || first?.answer || first?.text || JSON.stringify(result));
+
+  return { success: true, answer: String(answer) };
+}
+
 async function datasetExists(datasetName) {
   const { apiKey, baseUrl } = await getSettings();
   if (!apiKey) throw new Error('No API key configured.');
@@ -425,6 +445,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'DATASET_EXISTS') {
     datasetExists(msg.datasetName)
+      .then(sendResponse)
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (msg.type === 'CHAT_SEARCH') {
+    chatSearch(msg.datasetName, msg.query, msg.deep)
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;

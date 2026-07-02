@@ -27,6 +27,7 @@
         Queue
         <span class="tab-badge" id="queueBadge" style="display:none;">0</span>
       </button>
+      <button class="tab-btn" id="tabBtnChat" data-tab="chat">Chat</button>
     </div>
 
     <div class="tab-panel" id="tabCognify">
@@ -69,6 +70,29 @@
           <p>No jobs yet.</p>
           <p>Cognify a page to see it here.</p>
         </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tabChat" style="display:none;">
+      <div class="chat-dataset-row">
+        <select id="chatDatasetSelect">
+          <option value="">Select a project...</option>
+        </select>
+        <label class="chat-deep-toggle" title="Slower, more thorough graph reasoning">
+          <input type="checkbox" id="chatDeepToggle">
+          <span>Deep</span>
+        </label>
+      </div>
+      <div class="chat-notice" id="chatNotice" style="display:none;"></div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="empty-state" id="chatEmptyState">
+          <p>Pick a project above.</p>
+          <p>Then ask it anything.</p>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Ask about this project..." autocomplete="off" disabled>
+        <button class="chat-send-btn" id="chatSendBtn" disabled>Send</button>
       </div>
     </div>
   </div>

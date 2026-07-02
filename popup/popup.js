@@ -598,11 +598,238 @@ function startQueuePolling() {
 }
 
 function switchTab(tab) {
-  const isCognify = tab === 'cognify';
-  document.getElementById('tabCognify').style.display = isCognify ? 'flex' : 'none';
-  document.getElementById('tabQueue').style.display = isCognify ? 'none' : 'flex';
-  document.getElementById('tabBtnCognify').classList.toggle('active', isCognify);
-  document.getElementById('tabBtnQueue').classList.toggle('active', !isCognify);
+  document.getElementById('tabCognify').style.display = tab === 'cognify' ? 'flex' : 'none';
+  document.getElementById('tabQueue').style.display = tab === 'queue' ? 'flex' : 'none';
+  document.getElementById('tabChat').style.display = tab === 'chat' ? 'flex' : 'none';
+  document.getElementById('tabBtnCognify').classList.toggle('active', tab === 'cognify');
+  document.getElementById('tabBtnQueue').classList.toggle('active', tab === 'queue');
+  document.getElementById('tabBtnChat').classList.toggle('active', tab === 'chat');
+  if (tab === 'chat') populateChatDatasets();
+}
+
+// --- Chat tab ---
+
+let chatDatasetSlug = null;
+const chatHistories = {}; // slug -> [{role, text}]
+
+function setChatNotice(msg) {
+  const notice = document.getElementById('chatNotice');
+  notice.textContent = msg || '';
+  notice.style.display = msg ? 'block' : 'none';
+}
+
+async function populateChatDatasets() {
+  const select = document.getElementById('chatDatasetSelect');
+  const placeholder = select.querySelector('option');
+  const prevValue = select.value;
+
+  select.disabled = true;
+  placeholder.textContent = 'Checking Cognee...';
+  select.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
+  setChatNotice('');
+
+  let remoteNames = null;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'TEST_CONNECTION' });
+    if (response?.success && Array.isArray(response.datasets)) {
+      remoteNames = new Set(response.datasets.map(d => d.name));
+    } else {
+      setChatNotice(`⚠ ${response?.error || 'Could not verify datasets with Cognee.'}`);
+    }
+  } catch (err) {
+    setChatNotice(`⚠ ${err.message}`);
+  }
+
+  placeholder.textContent = 'Select a project...';
+  select.disabled = false;
+
+  // Only list projects whose dataset is confirmed to exist in Cognee —
+  // a project cognified but not yet processed there shouldn't be chattable.
+  const available = remoteNames ? projects.filter(p => remoteNames.has(p.slug)) : [];
+
+  available.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.slug;
+    opt.textContent = p.name;
+    select.appendChild(opt);
+  });
+
+  if (remoteNames && available.length === 0 && projects.length > 0) {
+    setChatNotice('No projects found in Cognee yet — cognify a page first.');
+  }
+
+  if (prevValue && available.some(p => p.slug === prevValue)) {
+    select.value = prevValue;
+  } else if (activeProjectId) {
+    const active = available.find(p => p.id === activeProjectId);
+    if (active) select.value = active.slug;
+  }
+  onChatDatasetChange(select.value);
+}
+
+function onChatDatasetChange(slug) {
+  chatDatasetSlug = slug || null;
+  document.getElementById('chatInput').disabled = !chatDatasetSlug;
+  document.getElementById('chatSendBtn').disabled = !chatDatasetSlug;
+  renderChatMessages();
+}
+
+function renderChatMessages() {
+  const container = document.getElementById('chatMessages');
+  container.querySelectorAll('.chat-msg').forEach(el => el.remove());
+  const emptyState = document.getElementById('chatEmptyState');
+
+  const history = chatDatasetSlug ? (chatHistories[chatDatasetSlug] || []) : [];
+  if (history.length === 0) {
+    emptyState.style.display = 'block';
+    emptyState.querySelector('p').textContent = chatDatasetSlug ? 'Ask it anything.' : 'Pick a project above.';
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  history.forEach(msg => {
+    const el = document.createElement('div');
+    el.className = `chat-msg ${msg.role}`;
+    if (msg.role === 'assistant') {
+      el.innerHTML = renderMarkdown(msg.text);
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'chat-copy-btn';
+      copyBtn.title = 'Copy response';
+      copyBtn.textContent = '⧉';
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(msg.text);
+          copyBtn.textContent = '✓';
+        } catch {
+          copyBtn.textContent = '✗';
+        }
+        setTimeout(() => { copyBtn.textContent = '⧉'; }, 1200);
+      });
+      el.appendChild(copyBtn);
+    } else {
+      el.textContent = msg.text;
+    }
+    container.appendChild(el);
+  });
+  container.scrollTop = container.scrollHeight;
+}
+
+function renderInlineMarkdown(line) {
+  return line
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+}
+
+const HEADING_RE = /^(#{1,6})\s+(.*)$/;
+const ORDERED_RE = /^\d+\.\s+/;
+const BULLET_RE = /^[-*]\s+/;
+const FENCE_RE = /^```\s*(\w*)\s*$/;
+
+function renderMarkdown(raw) {
+  const lines = escapeHtml(raw).split('\n');
+  let html = '';
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+
+    const fence = line.match(FENCE_RE);
+    if (fence) {
+      const lang = fence[1].toLowerCase();
+      const body = [];
+      i++;
+      while (i < lines.length && !FENCE_RE.test(lines[i])) {
+        body.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++; // skip closing fence
+
+      if (lang === '' || lang === 'markdown' || lang === 'md') {
+        // whole answer wrapped in a ```markdown fence — unwrap and keep parsing as markdown
+        lines.splice(i, 0, ...body);
+      } else {
+        html += `<pre><code>${body.join('\n')}</code></pre>`;
+      }
+      continue;
+    }
+
+    const heading = line.match(HEADING_RE);
+    if (heading) {
+      const level = heading[1].length;
+      html += `<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`;
+      i++;
+      continue;
+    }
+
+    if (ORDERED_RE.test(line)) {
+      const items = [];
+      while (i < lines.length && ORDERED_RE.test(lines[i])) {
+        items.push(`<li>${renderInlineMarkdown(lines[i].replace(ORDERED_RE, ''))}</li>`);
+        i++;
+      }
+      html += `<ol>${items.join('')}</ol>`;
+      continue;
+    }
+
+    if (BULLET_RE.test(line)) {
+      const items = [];
+      while (i < lines.length && BULLET_RE.test(lines[i])) {
+        items.push(`<li>${renderInlineMarkdown(lines[i].replace(BULLET_RE, ''))}</li>`);
+        i++;
+      }
+      html += `<ul>${items.join('')}</ul>`;
+      continue;
+    }
+
+    const paraLines = [];
+    while (i < lines.length && lines[i].trim() && !HEADING_RE.test(lines[i]) && !ORDERED_RE.test(lines[i]) && !BULLET_RE.test(lines[i])) {
+      paraLines.push(renderInlineMarkdown(lines[i]));
+      i++;
+    }
+    html += `<p>${paraLines.join('<br>')}</p>`;
+  }
+
+  return html;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const query = input.value.trim();
+  if (!query || !chatDatasetSlug) return;
+
+  const slug = chatDatasetSlug;
+  if (!chatHistories[slug]) chatHistories[slug] = [];
+  chatHistories[slug].push({ role: 'user', text: query });
+  input.value = '';
+  renderChatMessages();
+
+  const sendBtn = document.getElementById('chatSendBtn');
+  sendBtn.disabled = true;
+  input.disabled = true;
+  chatHistories[slug].push({ role: 'loading', text: 'Thinking...' });
+  renderChatMessages();
+
+  try {
+    const deep = document.getElementById('chatDeepToggle').checked;
+    const response = await chrome.runtime.sendMessage({ type: 'CHAT_SEARCH', datasetName: slug, query, deep });
+    chatHistories[slug].pop(); // remove loading placeholder
+    if (response?.success) {
+      chatHistories[slug].push({ role: 'assistant', text: response.answer });
+    } else {
+      chatHistories[slug].push({ role: 'error', text: `✗ ${response?.error || 'Chat failed.'}` });
+    }
+  } catch (err) {
+    chatHistories[slug].pop();
+    chatHistories[slug].push({ role: 'error', text: `✗ ${err.message}` });
+  } finally {
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+    renderChatMessages();
+  }
 }
 
 // Event listeners
@@ -657,6 +884,15 @@ document.getElementById('cognifyBtn').addEventListener('click', enqueueActiveTab
 
 document.getElementById('tabBtnCognify').addEventListener('click', () => switchTab('cognify'));
 document.getElementById('tabBtnQueue').addEventListener('click', () => switchTab('queue'));
+document.getElementById('tabBtnChat').addEventListener('click', () => switchTab('chat'));
+
+document.getElementById('chatDatasetSelect').addEventListener('change', (e) => onChatDatasetChange(e.target.value));
+
+document.getElementById('chatSendBtn').addEventListener('click', sendChatMessage);
+
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChatMessage();
+});
 
 // Init
 loadState();
