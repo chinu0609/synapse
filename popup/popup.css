@@ -320,6 +320,12 @@ body::after {
   letter-spacing: 0.8px;
 }
 
+.section-label-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .add-btn {
   background: none;
   border: 1px solid #334155;

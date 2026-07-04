@@ -178,6 +178,44 @@ async function deleteProject(id) {
   );
 }
 
+async function syncProjectsFromCognee() {
+  const btn = document.getElementById('syncProjectsBtn');
+  btn.disabled = true;
+  setStatus('Syncing projects from Cognee...', 'loading');
+
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'LIST_DATASETS' });
+    if (!response?.success) throw new Error(response?.error || 'Failed to list datasets.');
+
+    const existingSlugs = new Set(projects.map(p => p.slug));
+    let added = 0;
+
+    for (const ds of response.datasets) {
+      if (!ds?.name || existingSlugs.has(ds.name)) continue;
+      const color = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
+      projects.push({ id: generateId(), name: ds.name, slug: ds.name, color });
+      existingSlugs.add(ds.name);
+      added++;
+    }
+
+    if (added > 0) {
+      await chrome.storage.local.set({ projects });
+      if (!activeProjectId && projects.length > 0) {
+        activeProjectId = projects[0].id;
+        await chrome.storage.local.set({ activeProjectId });
+      }
+      renderProjects();
+      updateCognifyBtn();
+    }
+
+    setStatus(added > 0 ? `✓ Synced ${added} project(s) from Cognee.` : 'Already up to date.', 'success');
+  } catch (err) {
+    setStatus(`✗ Sync failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function updateCognifyBtn() {
   const btn = document.getElementById('cognifyBtn');
   btn.disabled = !activeProjectId || isProcessing;
@@ -940,6 +978,8 @@ async function sendChatMessage() {
 document.getElementById('settingsBtn').addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
+
+document.getElementById('syncProjectsBtn').addEventListener('click', syncProjectsFromCognee);
 
 document.getElementById('addProjectBtn').addEventListener('click', () => {
   const form = document.getElementById('addProjectForm');

@@ -3,6 +3,18 @@ const QUEUE_ALARM = 'synapse-queue-tick';
 const IDB_NAME = 'synapse-jobs';
 const IDB_STORE = 'payloads';
 
+// Serializes every top-level queue operation (enqueue/tick/remove/stop) so
+// their read-modify-write cycles on chrome.storage.local never interleave.
+// Without this, a poll-triggered tickQueue() running concurrently with an
+// enqueueJob() can save a stale snapshot last and silently wipe out the job
+// the other call just added.
+let queueLock = Promise.resolve();
+function withQueueLock(fn) {
+  const run = queueLock.then(fn, fn);
+  queueLock = run.then(() => {}, () => {});
+  return run;
+}
+
 async function getSettings() {
   const data = await chrome.storage.local.get(['cogneeApiKey', 'cogneeBaseUrl']);
   return {
@@ -103,6 +115,14 @@ async function chatSearch(datasetName, query, deep) {
     : (searchResult || first?.answer || first?.text || JSON.stringify(result));
 
   return { success: true, answer: String(answer) };
+}
+
+async function listDatasets() {
+  const { apiKey, baseUrl } = await getSettings();
+  if (!apiKey) throw new Error('No API key configured.');
+
+  const list = await cogneeRequest('/api/v1/datasets', 'GET', null, apiKey, baseUrl);
+  return { success: true, datasets: Array.isArray(list) ? list : [] };
 }
 
 async function datasetExists(datasetName) {
@@ -401,21 +421,20 @@ chrome.runtime.onStartup.addListener(ensureAlarm);
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === QUEUE_ALARM) {
-    tickQueue();
+    withQueueLock(tickQueue);
   }
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'ENQUEUE_JOB') {
-    enqueueJob(msg)
+    withQueueLock(() => enqueueJob(msg))
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
   if (msg.type === 'GET_QUEUE') {
-    tickQueue()
-      .catch(() => {})
+    withQueueLock(() => tickQueue().catch(() => {}))
       .then(() => getJobsAndState())
       .then(({ jobs }) => sendResponse({ success: true, jobs }))
       .catch(err => sendResponse({ success: false, error: err.message }));
@@ -423,14 +442,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'REMOVE_JOB') {
-    removeJob(msg.id)
+    withQueueLock(() => removeJob(msg.id))
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
   if (msg.type === 'STOP_JOB') {
-    stopJob(msg.id)
+    withQueueLock(() => stopJob(msg.id))
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
@@ -438,6 +457,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'DELETE_DATASET') {
     deleteDatasetByName(msg.datasetName)
+      .then(sendResponse)
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (msg.type === 'LIST_DATASETS') {
+    listDatasets()
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
