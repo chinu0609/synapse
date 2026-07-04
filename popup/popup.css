@@ -187,14 +187,15 @@ body::after {
   display: flex;
   flex-direction: column;
   flex: 1;
-  overflow: hidden; 
+  min-height: 0;
+  overflow: hidden;
 }
 
 .project-list, .queue-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px 12px;
-  max-height: 380px;
 }
 
 .job-row {

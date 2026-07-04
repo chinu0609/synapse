@@ -326,10 +326,34 @@ async function extractYoutubeJob(tab) {
     func: async () => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-      function findByLabel(pattern) {
-        const candidates = document.querySelectorAll(
-          'button, tp-yt-paper-button, ytd-button-renderer, ytd-menu-service-item-renderer'
-        );
+      // YouTube preloads an empty engagement-panel shell (matching the
+      // broad selector below) before the transcript is ever requested —
+      // so the pre-click "is it already open" check must only trust the
+      // narrow selector, which only exists once content has actually loaded.
+      const POPULATED_PANEL_SELECTOR = 'ytd-transcript-renderer, ytd-transcript-segment-list-renderer';
+      const PANEL_SELECTOR = POPULATED_PANEL_SELECTOR + ', ytd-engagement-panel-section-list-renderer[target-id*="transcript"]';
+      // Older layout used the polymer-style tag; current YouTube renders
+      // each line as the newer Lit "view model" element instead.
+      const SEGMENT_SELECTOR = 'ytd-transcript-segment-renderer, transcript-segment-view-model';
+
+      // YouTube's custom elements (tp-yt-paper-button, ytd-button-renderer,
+      // etc.) often only wire up their handler on an inner native <button>
+      // and rely on a real pointerdown/pointerup gesture — plain .click()
+      // on the outer wrapper silently no-ops. Drill down to the actual
+      // clickable node and dispatch a full pointer + click sequence.
+      function realClick(el) {
+        const target = el.querySelector?.('button, a[href], [role="button"], yt-icon-button') || el;
+        const opts = { bubbles: true, cancelable: true, composed: true, view: window };
+        target.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, isPrimary: true }));
+        target.dispatchEvent(new MouseEvent('mousedown', opts));
+        target.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, isPrimary: true }));
+        target.dispatchEvent(new MouseEvent('mouseup', opts));
+        target.dispatchEvent(new MouseEvent('click', opts));
+        target.click?.();
+      }
+
+      function findIn(root, selector, pattern) {
+        const candidates = root.querySelectorAll(selector);
         for (const el of candidates) {
           const label = (el.getAttribute?.('aria-label') || el.textContent || '').trim();
           if (pattern.test(label)) return el;
@@ -337,22 +361,77 @@ async function extractYoutubeJob(tab) {
         return null;
       }
 
+      // The video's own "More actions" (⋮) menu — scoped to the actions row
+      // next to the title, NOT the whole document, since comments/related
+      // videos/playlist rows all have their own "More actions" buttons too.
+      function findVideoMoreActionsButton() {
+        const scope = document.querySelector('ytd-watch-metadata, #above-the-fold, #top-row') || document;
+        return findIn(scope, 'button, tp-yt-paper-button, ytd-button-renderer', /^more actions$/i);
+      }
+
+      function findShowTranscriptButton() {
+        return (
+          findIn(document, 'ytd-video-description-transcript-section-renderer button, ytd-video-description-transcript-section-renderer ytd-button-renderer', /show transcript/i) ||
+          findIn(document, 'button, tp-yt-paper-button, ytd-button-renderer', /show transcript/i)
+        );
+      }
+
+      // A dropdown opened via a trigger button gets attached as a sibling
+      // <tp-yt-iron-dropdown> right after that trigger, not necessarily
+      // nested inside it — search near the trigger, not the whole page,
+      // so we don't grab a menu item from an unrelated open dropdown.
+      function findOpenDropdownItem(triggerBtn, pattern) {
+        let root = triggerBtn.closest('ytd-menu-renderer') || triggerBtn.parentElement;
+        for (let i = 0; i < 5 && root; i++) {
+          const dropdown = root.querySelector('tp-yt-iron-dropdown:not([aria-hidden="true"])') ||
+            root.parentElement?.querySelector(':scope > tp-yt-iron-dropdown:not([aria-hidden="true"])');
+          if (dropdown) {
+            const item = findIn(dropdown, 'ytd-menu-service-item-renderer, tp-yt-paper-item, a, button', pattern);
+            if (item) return item;
+          }
+          root = root.parentElement;
+        }
+        // Fallback: any open (non-hidden) dropdown anywhere on the page.
+        for (const dropdown of document.querySelectorAll('tp-yt-iron-dropdown:not([aria-hidden="true"])')) {
+          const item = findIn(dropdown, 'ytd-menu-service-item-renderer, tp-yt-paper-item, a, button', pattern);
+          if (item) return item;
+        }
+        return null;
+      }
+
+      function expandDescription() {
+        const expandBtn = findIn(document, 'tp-yt-paper-button#expand, #expand, ytd-text-inline-expander tp-yt-paper-button', /^\s*(\.\.\.\s*)?more\s*$/i);
+        if (expandBtn) {
+          realClick(expandBtn);
+          return true;
+        }
+        return false;
+      }
+
       try {
         // Read the transcript straight from YouTube's own "Show transcript"
         // panel — the network caption endpoint now blocks scripted fetches
         // (needs a proof-of-origin token only the real player can produce),
         // but the panel just displays whatever the player already loaded.
-        let panel = document.querySelector('ytd-transcript-renderer, ytd-transcript-segment-list-renderer');
+        let panel = document.querySelector(POPULATED_PANEL_SELECTOR);
 
         if (!panel) {
-          let btn = findByLabel(/show transcript/i);
+          let btn = findShowTranscriptButton();
+
+          // Newer layouts only render the "Show transcript" button once the
+          // description panel is expanded — try that before falling back
+          // to the overflow menu.
+          if (!btn && expandDescription()) {
+            await sleep(400);
+            btn = findShowTranscriptButton();
+          }
 
           if (!btn) {
-            const moreBtn = findByLabel(/^more actions$/i);
+            const moreBtn = findVideoMoreActionsButton();
             if (moreBtn) {
-              moreBtn.click();
+              realClick(moreBtn);
               await sleep(500);
-              btn = findByLabel(/show transcript/i);
+              btn = findOpenDropdownItem(moreBtn, /show transcript/i);
             }
           }
 
@@ -360,11 +439,13 @@ async function extractYoutubeJob(tab) {
             return { error: 'Could not find YouTube\'s "Show transcript" button on this video.' };
           }
 
-          btn.click();
+          btn.scrollIntoView({ block: 'center' });
+          await sleep(200);
+          realClick(btn);
 
-          for (let i = 0; i < 20 && !panel; i++) {
-            await sleep(250);
-            panel = document.querySelector('ytd-transcript-renderer, ytd-transcript-segment-list-renderer');
+          for (let i = 0; i < 30 && !panel; i++) {
+            await sleep(300);
+            panel = document.querySelector(PANEL_SELECTOR);
           }
         }
 
@@ -373,17 +454,40 @@ async function extractYoutubeJob(tab) {
         }
 
         for (let i = 0; i < 20; i++) {
-          if (panel.querySelectorAll('ytd-transcript-segment-renderer').length > 0) break;
+          if (panel.querySelectorAll(SEGMENT_SELECTOR).length > 0) break;
           await sleep(250);
         }
 
-        const segments = Array.from(panel.querySelectorAll('ytd-transcript-segment-renderer'));
+        let segments = Array.from(panel.querySelectorAll(SEGMENT_SELECTOR));
+
         if (segments.length === 0) {
-          return { error: 'Transcript panel opened but contained no segments.' };
+          // Fall back to a page-wide search in case the matched "panel" is
+          // an outer wrapper that doesn't actually contain the segment
+          // nodes in the light DOM (e.g. they live in a sibling renderer).
+          segments = Array.from(document.querySelectorAll(SEGMENT_SELECTOR));
+        }
+
+        if (segments.length === 0) {
+          const tags = new Set();
+          panel.querySelectorAll('*').forEach(el => tags.add(el.tagName.toLowerCase()));
+          const diag = {
+            panelTag: panel.tagName.toLowerCase(),
+            targetId: panel.getAttribute?.('target-id') || null,
+            hasShadowRoot: !!panel.shadowRoot,
+            childTags: Array.from(tags).slice(0, 40),
+            innerTextSample: (panel.textContent || '').trim().slice(0, 200)
+          };
+          return { error: `Transcript panel opened but contained no segments. DIAG: ${JSON.stringify(diag)}` };
         }
 
         const text = segments
-          .map(seg => (seg.querySelector('.segment-text')?.textContent || seg.textContent || '').trim())
+          .map(seg => {
+            const raw = (seg.querySelector('.segment-text')?.textContent || seg.textContent || '').trim();
+            // transcript-segment-view-model has no dedicated text class — its
+            // textContent is "<timestamp><line text>" (e.g. "51:42CASP, we...").
+            // Strip a leading timestamp like "51:42" or "1:02:40" if present.
+            return raw.replace(/^\d{1,2}(:\d{2}){1,2}(?=\D)/, '').trim();
+          })
           .filter(Boolean)
           .join(' ')
           .replace(/\s+/g, ' ')
