@@ -481,19 +481,23 @@ async function extractYoutubeJob(tab) {
           await sleep(200);
           realClick(btn);
 
-          for (let i = 0; i < 30 && !panel; i++) {
-            await sleep(300);
+          // Slow connections / long videos can take a while to actually
+          // populate the panel after the click — give it up to ~20s.
+          for (let i = 0; i < 40 && !panel; i++) {
+            await sleep(500);
             panel = document.querySelector(PANEL_SELECTOR);
           }
         }
 
         if (!panel) {
-          return { error: 'Transcript panel did not open. This video may not have a transcript.' };
+          return { error: 'Transcript panel did not open. This video may not have a transcript, or check your internet connection and try again.' };
         }
 
-        for (let i = 0; i < 20; i++) {
+        // Segment rows can take a bit longer to render in on slower
+        // connections — give it up to ~12s before giving up.
+        for (let i = 0; i < 30; i++) {
           if (panel.querySelectorAll(SEGMENT_SELECTOR).length > 0) break;
-          await sleep(250);
+          await sleep(400);
         }
 
         let segments = Array.from(panel.querySelectorAll(SEGMENT_SELECTOR));
@@ -515,7 +519,7 @@ async function extractYoutubeJob(tab) {
             childTags: Array.from(tags).slice(0, 40),
             innerTextSample: (panel.textContent || '').trim().slice(0, 200)
           };
-          return { error: `Transcript panel opened but contained no segments. DIAG: ${JSON.stringify(diag)}` };
+          return { error: `Transcript panel opened but contained no segments — check your internet connection and try again. DIAG: ${JSON.stringify(diag)}` };
         }
 
         const text = segments
