@@ -441,7 +441,6 @@ body::after {
   flex: 1;
   overflow-y: auto;
   padding: 4px 12px 8px;
-  max-height: 260px;
 }
 
 .project-list::-webkit-scrollbar {
@@ -649,8 +648,8 @@ body::after {
   position: relative;
   z-index: 10;
   padding: 16px 20px 20px;
-  
-  
+
+
   background: transparent;
   border-top: none;
   box-shadow: none;
