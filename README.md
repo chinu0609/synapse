@@ -102,6 +102,8 @@ curl -H "X-Api-Key: YOUR_KEY" http://localhost:8000/api/v1/datasets
 
 If curl succeeds but extension fails, check `background/service-worker.js` `cogneeRequest`/`cogneeFormRequest` header handling and confirm `host_permissions` change from 3.5 was actually reloaded.
 
+<img width="2720" height="2824" alt="synapse_cognify_job_flow_with_integrations" src="https://github.com/user-attachments/assets/426a3576-b29d-418b-86b8-fb2bec36f5f0" />
+
 ---
 
 ## 4. Verify end-to-end
